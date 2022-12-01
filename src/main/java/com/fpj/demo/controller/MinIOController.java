@@ -5,6 +5,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 /**
  * @Description
  * @Author fangpengjun
@@ -21,8 +24,16 @@ public class MinIOController {
      * 上传文件
      */
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file){
-        return minIOService.upload(file);
+    public String uploadFile(@RequestParam("file") MultipartFile file, @RequestParam(name = "path", required = false, defaultValue = "") String path){
+        return minIOService.upload(file, path);
+    }
+
+    /**
+     * 下载文件
+     */
+    @GetMapping("/download")
+    public void downloadFile(@RequestParam(name = "path") String path, HttpServletRequest request, HttpServletResponse response){
+         minIOService.download(path, request, response);
     }
 
     /**
