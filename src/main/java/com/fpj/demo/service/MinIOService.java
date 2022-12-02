@@ -2,6 +2,7 @@ package com.fpj.demo.service;
 
 import com.fpj.demo.config.MinIOConfiguration;
 import io.minio.*;
+import io.minio.messages.Item;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.net.URLEncoder;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 
 /**
  * @Description
@@ -47,6 +50,16 @@ public class MinIOService {
         long start = System.currentTimeMillis();
 
         try {
+
+            //校验存储桶是否存在
+            boolean isExit = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+            if(!isExit){
+                //创建一个名为xxn的存储桶，用于存储上传的文件
+                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                log.info("upload file create bucket is success, 上传文件bucket不存在，创建bucket：{}, fileName:{}", bucket, fileName);
+            }
+
+            //上传文件
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket)  // 存储桶
                     .object(fileName)                        // 文件名
@@ -58,16 +71,16 @@ public class MinIOService {
             e.printStackTrace();
             return String.format("上传文件失败，bucket:{}, fileName:{}", bucket, fileName);
         }
-        log.info("upload file, 上传文件成功，上传耗时：{} milliseconds， bucket:{}, fileName:{}, fileByteSize:{} Byte, fileMbSize:{} MIB", System.currentTimeMillis()-start, bucket, fileName, fileSize, String.format("%.3f",fileSize*1.0/1024/1024));
+        log.info("upload file, 上传文件成功，上传耗时：{} milliseconds， bucket:{}, fileName:{}, fileByteSize:{} Byte, fileMIBSize:{} MIB", System.currentTimeMillis()-start, bucket, fileName, fileSize, String.format("%.3f",fileSize*1.0/1024/1024));
         return String.format("%s/%s", bucket, fileName);
     }
 
 
-    /**
+    /*    *//**
      * 下载bucket下的文件，path包括bucket下的路径及文件名称
      * @param path
      * @return
-     */
+     *//*
     public void download(String path, HttpServletRequest request, HttpServletResponse response) {
         String bucket = minIOConfiguration.getBucket();
 
@@ -127,8 +140,72 @@ public class MinIOService {
         }
         log.info("download file is over, 下载文件结束， fileName:{}", path);
 
+    }*/
+
+    public void download(String filename, HttpServletResponse response){
+        String bucket = minIOConfiguration.getBucket();
+
+        try {
+            //下载文件流
+            InputStream stream = minioClient.getObject(
+                    GetObjectArgs.builder().bucket(bucket).object(filename).build());
+
+            BufferedInputStream ism = new BufferedInputStream(stream);
+            byte[] buf = new byte[1024];
+            int i=0;
+            response.setHeader("Content-Disposition","attachment;filename="+ URLEncoder.encode(filename,"utf-8"));
+            response.setHeader("Access-Control-Allow-Origin","*");
+            response.setHeader("Access-Control-Allow-Methods","GET");
+            response.setHeader("Access-Control-Allow-Headers",":x-requested-with,content-type");
+            response.setContentType("application/x-msdownload");
+            response.setCharacterEncoding("utf-8");
+            BufferedOutputStream osm=new BufferedOutputStream(response.getOutputStream());
+            while ((i=ism.read(buf))>0){
+                osm.write(buf,0,i);
+            }
+            osm.flush();
+            osm.close();
+        } catch (Exception e) {
+            log.error("download file is error,下载文件出现错误， fileName:{}, errMsg:{}", filename, e.getMessage());
+            e.printStackTrace();
+        }
+        log.info("download file is success, 下载文件成功， fileName:{}", filename);
     }
 
+    /**
+     * 查询bucket下的所有安装包文件
+     * @return
+     */
+    public List listBucketFiles(){
+        String bucket = minIOConfiguration.getBucket();
+        List<Map<String, Object>> list = new ArrayList();
+        try {
+            // 检查bucket是否存在。
+            boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+            if (!found) {
+                log.error("list bucket files, 查询bucket下所有对象列表出错，不存在bucket:{}",  bucket);
+                return Collections.emptyList();
+            }
+            // 列出bucket里的对象
+            Iterable<Result<Item>> myObjects = minioClient.listObjects(ListObjectsArgs.builder().bucket(bucket).build());
+            for (Result<Item> result : myObjects) {
+                Item item = result.get();
+                Map<String, Object> fileItemObjMap =  new HashMap<>();
+                fileItemObjMap.put("fileName", item.objectName());
+                fileItemObjMap.put("fileBytes", item.size());
+                fileItemObjMap.put("fileByteSize", String.format("%d Byte", item.size()));
+                fileItemObjMap.put("fileMIBSize", String.format("%.3f MIB",item.size()*1.0/1024/1024));
+                fileItemObjMap.put("lastModified", item.lastModified());
+                //System.out.println(item.lastModified() + ", " + item.size() + ", " + item.objectName());
+                list.add(fileItemObjMap);
+            }
+        } catch (Exception e) {
+            log.error("list bucket files, 查询bucket下所有对象列表出错，不存在bucket:{}, errMsg:{}",  bucket, e.getMessage());
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
+        return list;
+    }
 
     /**
      * 删除bucket下的文件，path包括bucket下的路径及文件名称

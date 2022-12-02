@@ -33,7 +33,15 @@ public class MinIOController {
      */
     @GetMapping("/download")
     public void downloadFile(@RequestParam(name = "path") String path, HttpServletRequest request, HttpServletResponse response){
-         minIOService.download(path, request, response);
+        minIOService.download(path, response);
+    }
+
+    /**
+     * 查询bucket下所有文件安装包
+     */
+    @GetMapping("/list_file")
+    public Object listFile(){
+        return minIOService.listBucketFiles();
     }
 
     /**
