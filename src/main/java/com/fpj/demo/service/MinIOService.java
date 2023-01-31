@@ -76,9 +76,8 @@ public class MinIOService {
     }
 
 
-    /*    *//**
+    /**
      * 下载bucket下的文件，path包括bucket下的路径及文件名称
-     * @param path
      * @return
      *//*
     public void download(String path, HttpServletRequest request, HttpServletResponse response) {
@@ -191,6 +190,11 @@ public class MinIOService {
             for (Result<Item> result : myObjects) {
                 Item item = result.get();
                 Map<String, Object> fileItemObjMap =  new HashMap<>();
+                if (item.isDir()){
+                    fileItemObjMap.put("fileName", item.objectName());
+                    list.add(fileItemObjMap);
+                    continue;
+                }
                 fileItemObjMap.put("fileName", item.objectName());
                 fileItemObjMap.put("fileBytes", item.size());
                 fileItemObjMap.put("fileByteSize", String.format("%d Byte", item.size()));
